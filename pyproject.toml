@@ -1,0 +1,37 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "codegraph"
+version = "0.1.0"
+description = "Turn any Python codebase into a queryable knowledge graph you can search, diagram, and ask questions about (grounded via a local LLM fleet)"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "LicenseRef-COCL-1.0" }
+authors = [{ name = "Cognis Digital LLC" }]
+keywords = ["knowledge-graph", "codebase-analysis", "ast", "developer-tools", "code-understanding", "llm", "rag"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: Other/Proprietary License",
+    "Programming Language :: Python :: 3 :: Only",
+    "Topic :: Software Development :: Documentation",
+]
+dependencies = []
+
+[project.urls]
+Homepage = "https://github.com/cognis-digital/codegraph"
+Issues = "https://github.com/cognis-digital/codegraph/issues"
+
+[project.scripts]
+codegraph = "codegraph.cli:main"
+
+[project.optional-dependencies]
+dev = ["pytest>=7"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["codegraph"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
