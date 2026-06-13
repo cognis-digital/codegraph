@@ -21,6 +21,35 @@ OpenAI-compatible backend over HTTP). Runs anywhere Python 3.10+ runs.
 Part of the **Cognis Neural Suite** — 300+ source-available tools organized across 12 domains under the JTF MERIDIAN command structure. See the [suite on GitHub](https://github.com/cognis-digital) and [jtf-meridian](https://github.com/cognis-digital/jtf-meridian) for how the pieces fit together.
 <!-- cognis:domains:end -->
 
+## Usage — step by step
+
+`codegraph` parses a Python project into a graph of modules/classes/functions linked by defines/imports/calls edges, then lets you query it.
+
+1. **Install** (Python 3.10+):
+   ```bash
+   pip install "git+https://github.com/cognis-digital/codegraph.git"
+   ```
+2. **Build the graph** from a codebase (defaults to `./codegraph.json`):
+   ```bash
+   codegraph build ./myproject --out codegraph.json
+   ```
+3. **Explore it** — counts, symbol search, and call relationships:
+   ```bash
+   codegraph stats
+   codegraph search Engine
+   codegraph callers func:pkg.mod.helper   # who calls this
+   codegraph callees func:pkg.mod.main     # what it calls
+   ```
+4. **Use the output** — export a Mermaid diagram (stdout or `--out`), or ask a graph-grounded question via your local coding fleet on `:8772` (override with `--backend`/`--model`):
+   ```bash
+   codegraph mermaid --focus func:pkg.mod.run --depth 1 --out graph.mmd
+   codegraph ask "how does request routing resolve a model?"
+   ```
+5. **Automate in CI** — rebuild on each commit and publish the diagram:
+   ```bash
+   codegraph build . --out codegraph.json && codegraph mermaid --out docs/arch.mmd
+   ```
+
 ## Install
 
 ```bash
