@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "codegraph"
-version = "0.1.0"
+version = "0.1.1"
 description = "Turn any Python codebase into a queryable knowledge graph you can search, diagram, and ask questions about (grounded via a local LLM fleet)"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -25,9 +25,11 @@ Homepage = "https://github.com/cognis-digital/codegraph"
 Issues = "https://github.com/cognis-digital/codegraph/issues"
 
 [project.scripts]
+"codegraph-emit" = "codegraph.connect:emit_main"
 codegraph = "codegraph.cli:main"
 
 [project.optional-dependencies]
+connect = ["cognis-connect @ git+https://github.com/cognis-digital/cognis-connect.git"]
 dev = ["pytest>=7"]
 
 [tool.hatch.build.targets.wheel]
