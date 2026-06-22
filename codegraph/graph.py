@@ -74,6 +74,107 @@ class KnowledgeGraph:
     def imports_of(self, module_id: str) -> list[str]:
         return sorted({e.dst for e in self.out_edges(module_id, "imports")})
 
+    def import_cycles(self) -> list[list[str]]:
+        """Detect circular import dependencies among the codebase's own modules.
+
+        Returns each circular-dependency cluster as a list of module ids, e.g.
+        ``["mod:a", "mod:b"]`` for ``a -> b -> a``. Clusters are the non-trivial
+        strongly-connected components of the in-repo import graph (a module that
+        imports itself counts too), so every reported group is a real, mutual
+        circular dependency rather than a one-way edge.
+
+        Only edges that stay inside this graph count (third-party imports are
+        already dropped at build time). Each cluster is sorted, and the list of
+        clusters is sorted, so the result is deterministic and stable across
+        runs and platforms.
+        """
+        adj: dict[str, list[str]] = defaultdict(list)
+        nodes: set[str] = set()
+        for edge in self.edges:
+            if edge.kind == "imports" and edge.src in self.nodes and edge.dst in self.nodes:
+                nodes.add(edge.src)
+                nodes.add(edge.dst)
+                if edge.dst not in adj[edge.src]:
+                    adj[edge.src].append(edge.dst)
+        for targets in adj.values():
+            targets.sort()
+
+        # Tarjan's strongly-connected-components (iterative; recursion-safe).
+        index_of: dict[str, int] = {}
+        low: dict[str, int] = {}
+        on_stack: set[str] = set()
+        stack: list[str] = []
+        counter = 0
+        sccs: list[list[str]] = []
+
+        for root in sorted(nodes):
+            if root in index_of:
+                continue
+            work: list[tuple[str, int]] = [(root, 0)]
+            while work:
+                v, pi = work[-1]
+                if pi == 0:
+                    index_of[v] = low[v] = counter
+                    counter += 1
+                    stack.append(v)
+                    on_stack.add(v)
+                recursed = False
+                neigh = adj.get(v, ())
+                while pi < len(neigh):
+                    w = neigh[pi]
+                    if w not in index_of:
+                        work[-1] = (v, pi + 1)
+                        work.append((w, 0))
+                        recursed = True
+                        break
+                    if w in on_stack:
+                        low[v] = min(low[v], index_of[w])
+                    pi += 1
+                if recursed:
+                    continue
+                if low[v] == index_of[v]:
+                    comp: list[str] = []
+                    while True:
+                        w = stack.pop()
+                        on_stack.discard(w)
+                        comp.append(w)
+                        if w == v:
+                            break
+                    sccs.append(sorted(comp))
+                work.pop()
+                if work:
+                    parent = work[-1][0]
+                    low[parent] = min(low[parent], low[v])
+
+        cycles = [c for c in sccs if len(c) > 1 or c[0] in adj.get(c[0], ())]
+        return sorted(cycles)
+
+    def cycle_findings(self) -> list[dict]:
+        """Import cycles rendered as JSON findings (for ``codegraph-emit``)."""
+        findings = []
+        for cluster in self.import_cycles():
+            mods = [self.nodes[m].name if m in self.nodes else m for m in cluster]
+            group = ", ".join(mods)
+            files = sorted({self.nodes[m].file for m in cluster if m in self.nodes})
+            findings.append({
+                "type": "import-cycle",
+                "title": f"Circular import among: {group}",
+                # a tight 2-module cycle is the most urgent to break; larger
+                # mutually-recursive clusters are medium.
+                "severity": "high" if len(cluster) == 2 else "medium",
+                "description": (
+                    f"{len(cluster)} module(s) form a circular import dependency "
+                    f"({group}). Circular imports couple modules tightly, can "
+                    f"raise ImportError depending on load order, and block clean "
+                    f"refactoring. Break the cycle by extracting the shared "
+                    f"symbols into a third module or using a local/deferred import."
+                ),
+                "modules": list(cluster),
+                "tags": ["code-health", "import-cycle", "maintainability"],
+                "files": files,
+            })
+        return findings
+
     def stats(self) -> dict[str, int]:
         kinds: dict[str, int] = defaultdict(int)
         for node in self.nodes.values():

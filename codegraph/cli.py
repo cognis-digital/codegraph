@@ -5,6 +5,7 @@
     codegraph search <query>                       find symbols by name
     codegraph callers <node_id>                    who calls this function
     codegraph callees <node_id>                    what this function calls
+    codegraph cycles [--format json]               find circular import dependencies
     codegraph mermaid [--focus name --depth N]     export a Mermaid diagram
     codegraph ask "<question>" [--backend URL]      grounded Q&A via the coding fleet
 
@@ -51,6 +52,10 @@ def main(argv: list[str] | None = None) -> int:
     p_callees = sub.add_parser("callees", help="functions a node calls")
     p_callees.add_argument("node_id")
 
+    p_cycles = sub.add_parser("cycles", help="find circular import dependencies")
+    p_cycles.add_argument("--format", choices=["text", "json"], default="text",
+                          help="'json' emits findings consumable by codegraph-emit")
+
     p_merm = sub.add_parser("mermaid", help="export a Mermaid diagram")
     p_merm.add_argument("--focus", default=None)
     p_merm.add_argument("--depth", type=int, default=1)
@@ -89,6 +94,22 @@ def main(argv: list[str] | None = None) -> int:
         for nid in _load(args.graph).callees(args.node_id):
             print(nid)
         return 0
+
+    if args.command == "cycles":
+        graph = _load(args.graph)
+        if args.format == "json":
+            import json
+            print(json.dumps({"findings": graph.cycle_findings()}, indent=2))
+            return 0
+        cycles = graph.import_cycles()
+        if not cycles:
+            print("no circular import dependencies found")
+            return 0
+        for cluster in cycles:
+            names = [graph.nodes[m].name if m in graph.nodes else m for m in cluster]
+            print(f"cycle ({len(cluster)} modules): {', '.join(names)}")
+        # non-zero exit so CI can gate on "no new import cycles"
+        return 1
 
     if args.command == "mermaid":
         text = _load(args.graph).to_mermaid(focus=args.focus, depth=args.depth)

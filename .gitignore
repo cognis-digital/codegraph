@@ -23,3 +23,7 @@ htmlcov/
 .idea/
 .vscode/
 .DS_Store
+
+# Generated demo outputs (demos ship inputs only; users regenerate these)
+demos/**/codegraph.json
+demos/**/*.mmd

@@ -40,15 +40,30 @@ Part of the **Cognis Neural Suite** — 300+ source-available tools organized ac
    codegraph callers func:pkg.mod.helper   # who calls this
    codegraph callees func:pkg.mod.main     # what it calls
    ```
-4. **Use the output** — export a Mermaid diagram (stdout or `--out`), or ask a graph-grounded question via your local coding fleet on `:8772` (override with `--backend`/`--model`):
+4. **Check code health** — find circular import dependencies (exits non-zero when any exist, so it doubles as a CI gate):
+   ```bash
+   codegraph cycles                # human-readable
+   codegraph cycles --format json  # findings for a SIEM / ticket / cognis-connect
+   ```
+5. **Use the output** — export a Mermaid diagram (stdout or `--out`), or ask a graph-grounded question via your local coding fleet on `:8772` (override with `--backend`/`--model`):
    ```bash
    codegraph mermaid --focus func:pkg.mod.run --depth 1 --out graph.mmd
    codegraph ask "how does request routing resolve a model?"
    ```
-5. **Automate in CI** — rebuild on each commit and publish the diagram:
+6. **Automate in CI** — rebuild on each commit, fail on new import cycles, and publish the diagram:
    ```bash
-   codegraph build . --out codegraph.json && codegraph mermaid --out docs/arch.mmd
+   codegraph build . --out codegraph.json
+   codegraph cycles                       # non-zero exit fails the build on a new cycle
+   codegraph mermaid --out docs/arch.mmd
    ```
+
+## Worked examples
+
+The [`demos/`](demos/) directory has seven self-contained, realistic
+mini-codebases — a REST API, an ETL pipeline, a CLI tool, an ML training loop,
+two flavors of circular-import bug, and a messy legacy package — each with a
+`SCENARIO.md` giving the exact commands and expected output. Every demo has
+been run end to end. Start with [`demos/README.md`](demos/README.md).
 
 ## Install
 
@@ -64,6 +79,7 @@ codegraph stats
 codegraph search Engine                # find symbols by name
 codegraph callers func:pkg.mod.helper  # who calls this?
 codegraph callees func:pkg.mod.main    # what does it call?
+codegraph cycles                       # circular import dependencies (CI-gateable)
 codegraph mermaid --focus func:pkg.mod.run --depth 1 --out graph.mmd
 codegraph ask "how does request routing resolve a model?"
 ```

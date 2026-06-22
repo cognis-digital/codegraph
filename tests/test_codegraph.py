@@ -119,3 +119,112 @@ def test_assemble_context_targets_relevant_nodes(sample_repo):
     assert "Engine" in ctx
     # relevant_nodes always returns something, even with no name match
     assert relevant_nodes(g, "completely unrelated zzz") != []
+
+
+# --- import-cycle detection ---------------------------------------------
+
+@pytest.fixture
+def cyclic_repo(tmp_path):
+    """A package with a 2-module cycle (a<->b) and an acyclic c."""
+    pkg = tmp_path / "pkg"
+    pkg.mkdir()
+    (pkg / "__init__.py").write_text("")
+    (pkg / "a.py").write_text("from pkg.b import bee\ndef a():\n    return bee()\n")
+    (pkg / "b.py").write_text("from pkg.a import a\ndef bee():\n    return a()\n")
+    (pkg / "c.py").write_text("from pkg.a import a\ndef c():\n    return a()\n")
+    return str(tmp_path)
+
+
+def test_import_cycles_finds_two_module_cycle(cyclic_repo):
+    g = build_graph(cyclic_repo)
+    cycles = g.import_cycles()
+    assert cycles == [["mod:pkg.a", "mod:pkg.b"]]
+    # c imports a but isn't imported back -> not in any cycle
+    assert all("mod:pkg.c" not in c for c in cycles)
+
+
+def test_import_cycles_none_when_acyclic(sample_repo):
+    # sample_repo: app imports core, but core never imports app
+    assert build_graph(sample_repo).import_cycles() == []
+
+
+def test_import_cycles_finds_three_module_scc(tmp_path):
+    pkg = tmp_path / "svc"
+    pkg.mkdir()
+    (pkg / "__init__.py").write_text("")
+    (pkg / "x.py").write_text("from svc.y import y\ndef x():\n    return y()\n")
+    (pkg / "y.py").write_text("from svc.z import z\ndef y():\n    return z()\n")
+    (pkg / "z.py").write_text("from svc.x import x\ndef z():\n    return x()\n")
+    cycles = build_graph(str(tmp_path)).import_cycles()
+    assert cycles == [["mod:svc.x", "mod:svc.y", "mod:svc.z"]]
+
+
+def test_cycle_findings_shape_and_severity(cyclic_repo, tmp_path):
+    g = build_graph(cyclic_repo)
+    findings = g.cycle_findings()
+    assert len(findings) == 1
+    f = findings[0]
+    assert f["type"] == "import-cycle"
+    assert f["severity"] == "high"          # a tight 2-module cycle
+    assert set(f["modules"]) == {"mod:pkg.a", "mod:pkg.b"}
+    assert "import-cycle" in f["tags"]
+    assert sorted(f["files"]) == ["pkg/a.py", "pkg/b.py"]
+
+
+def test_cycle_findings_three_module_is_medium(tmp_path):
+    root = tmp_path / "proj"
+    pkg = root / "svc"
+    pkg.mkdir(parents=True)
+    (pkg / "__init__.py").write_text("")
+    (pkg / "x.py").write_text("from svc.y import y\n")
+    (pkg / "y.py").write_text("from svc.z import z\n")
+    (pkg / "z.py").write_text("from svc.x import x\n")
+    findings = build_graph(str(root)).cycle_findings()
+    assert len(findings) == 1
+    assert findings[0]["severity"] == "medium"
+    assert len(findings[0]["modules"]) == 3
+
+
+def test_cli_cycles_exit_codes(tmp_path, capsys):
+    from codegraph.cli import main
+
+    # cyclic project in its own root
+    cyc_root = tmp_path / "cyc_proj"
+    pkg = cyc_root / "pkg"
+    pkg.mkdir(parents=True)
+    (pkg / "__init__.py").write_text("")
+    (pkg / "a.py").write_text("from pkg.b import bee\ndef a():\n    return bee()\n")
+    (pkg / "b.py").write_text("from pkg.a import a\ndef bee():\n    return a()\n")
+    cyc_graph = str(tmp_path / "cyc.json")
+    build_graph(str(cyc_root)).save(cyc_graph)
+    assert main(["--graph", cyc_graph, "cycles"]) == 1          # cycles -> nonzero
+    assert "cycle" in capsys.readouterr().out
+
+    # acyclic project in a separate root
+    clean_root = tmp_path / "clean_proj"
+    sp = clean_root / "sample"
+    sp.mkdir(parents=True)
+    (sp / "__init__.py").write_text("")
+    (sp / "core.py").write_text("def helper(x):\n    return x + 1\n")
+    (sp / "app.py").write_text("from sample.core import helper\ndef main():\n    return helper(1)\n")
+    clean_graph = str(tmp_path / "clean.json")
+    build_graph(str(clean_root)).save(clean_graph)
+    assert main(["--graph", clean_graph, "cycles"]) == 0        # none -> zero
+    assert "no circular import" in capsys.readouterr().out
+
+
+def test_cli_cycles_json_format(tmp_path, capsys):
+    import json
+    from codegraph.cli import main
+
+    root = tmp_path / "proj"
+    pkg = root / "pkg"
+    pkg.mkdir(parents=True)
+    (pkg / "__init__.py").write_text("")
+    (pkg / "a.py").write_text("from pkg.b import bee\ndef a():\n    return bee()\n")
+    (pkg / "b.py").write_text("from pkg.a import a\ndef bee():\n    return a()\n")
+    g = str(tmp_path / "cyc.json")
+    build_graph(str(root)).save(g)
+    main(["--graph", g, "cycles", "--format", "json"])
+    out = json.loads(capsys.readouterr().out)
+    assert out["findings"][0]["type"] == "import-cycle"

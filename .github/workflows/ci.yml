@@ -26,3 +26,4 @@ jobs:
         run: |
           codegraph build codegraph --out g.json
           codegraph --graph g.json stats
+          codegraph --graph g.json cycles   # codegraph's own package is cycle-free
