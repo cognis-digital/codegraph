@@ -12,6 +12,62 @@ Pure standard library for everything except `ask` (which talks to an
 OpenAI-compatible backend over HTTP). Runs anywhere Python 3.10+ runs.
 
 <!-- cognis:domains:start -->
+
+<!-- cognis:example:start -->
+## 🔎 Example output
+
+Real, reproducible output from the tool — runs offline:
+
+```console
+$ codegraph-emit --help
+usage: codegraph-emit [-h]
+                      --to {stix,taxii,misp,sigma,splunk,elastic,slack,discord,webhook,brief,findings}
+                      [--url URL] [--token TOKEN] [--dry-run]
+                      [input]
+
+forward codegraph JSON findings to a platform via cognis-connect
+
+positional arguments:
+  input                 findings JSON file (default: stdin)
+
+options:
+  -h, --help            show this help message and exit
+  --to {stix,taxii,misp,sigma,splunk,elastic,slack,discord,webhook,brief,findings}
+  --url URL
+  --token TOKEN
+  --dry-run
+```
+
+> Blocks above are real `codegraph` output — reproduce them from a clone.
+
+**Sample result format** _(illustrative values — run on your own data for real findings):_
+
+```
+{
+  "codeGraph": {
+    "id": "1234567890",
+    "name": "Example Code Graph",
+    "description": "This is an example code graph.",
+    "findings": [
+      {
+        "id": "1",
+        "title": "Example Finding 1",
+        "category": "example_category",
+        "severity": "high"
+      },
+      {
+        "id": "2",
+        "title": "Example Finding 2",
+        "category": "another_example_category",
+        "severity": "medium"
+      }
+    ]
+  }
+}
+```
+
+<!-- cognis:example:end -->
+
 ## Domains
 
 **Primary domain:** AI & ML  ·  **JTF MERIDIAN division:** ATHENA-PRIME · SAGE
